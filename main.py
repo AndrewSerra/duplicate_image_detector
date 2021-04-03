@@ -4,8 +4,8 @@ import sys
 import numpy as np
 import random
 import shutil
-from threading import Thread
 from queue import Queue
+from PIL import Image
 
 TEST = True
 
@@ -68,7 +68,7 @@ def cleanup_test_dir():
         try:
             os.remove(file)
         except IsADirectoryError:
-            os.rmdir(file)
+            shutil.rmtree(file, ignore_errors=True)
             
     # Return to main directory
     os.chdir(main_dir)
@@ -102,21 +102,33 @@ def find_duplicates(dir):
     os.mkdir('./' + UNIQUE_DIRNAME)
     os.mkdir('./' + DUPLICATE_DIRNAME)
 
-    # Queue object
     queue = create_queue()
-    # Threads
-    threads = list()
     
-    for i in range(5):
-        thread = Thread(target=thread_worker, args=(queue, i))
-        threads.append(thread)
-        thread.start()
+    while not queue.empty():
+        file = queue.get()
+        f_abs_path = os.path.abspath(file)
+        uniques = os.listdir('./' + UNIQUE_DIRNAME)
+        
+        if os.path.isfile(f_abs_path):
+            with Image.open(f_abs_path) as im_file:
+                if len(uniques) == 0:
+                    shutil.move(f_abs_path, os.getcwd() + '/' + UNIQUE_DIRNAME)
+                else:
+                    match_found = False
+                    for unique_file in uniques:
+                        unique_abs_path = os.path.abspath('./' + UNIQUE_DIRNAME + '/' + unique_file)
+                        
+                        with Image.open(unique_abs_path) as unique_im:
 
-    queue.join()
-    
-    for thread in threads:
-        thread.join()
-
+                            if unique_im.format == im_file.format and unique_im.size[0] == im_file.size[0] and unique_im.size[1] == im_file.size[1]:
+                                shutil.move(f_abs_path, os.getcwd() + '/' + DUPLICATE_DIRNAME)
+                                print("{:<15} {:<30} -> {:<30}".format("Found match:", os.path.basename(file), unique_file))
+                                match_found = True
+                                break
+                            
+                    if not match_found:
+                        shutil.move(f_abs_path, os.getcwd() + '/' + UNIQUE_DIRNAME)
+                        print("{:<15} {}".format("Found unique:", os.path.basename(file)))    
     
 
 if __name__ == "__main__":
